@@ -1,0 +1,22 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+
+[scripts]
+setup = "npm ci"
+run_mode = "concurrent"
+
+[scripts.run.http]
+command = "npm run dev:http"
+default = true
+icon = "server"
+
+[scripts.run.test]
+command = "npm test"
+icon = "test-tube"
+
+[scripts.run.check]
+command = "npm run lint && npm run typecheck && npm test"
+icon = "shield-check"
+
+[prompts]
+code_review = "Focus on New Relic API correctness, MCP protocol behavior, account isolation, secret handling, mutation gates, and missing tests."
+general = "Keep public operations tied to official New Relic documentation and run the narrowest relevant checks before handing off."

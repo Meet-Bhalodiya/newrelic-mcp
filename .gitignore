@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+*.tgz
+.env
+.env.local
+docker-compose.local.yml
+.mcp.json
+.codex/config.toml
+.DS_Store
+.vitest/
+*.log
+tmp/
+helm/charts/
+/secrets/
