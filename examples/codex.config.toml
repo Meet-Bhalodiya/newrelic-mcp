@@ -1,0 +1,11 @@
+[mcp_servers.newrelic]
+command = "npx"
+args = ["-y", "@meet-bhalodiya/newrelic-mcp@1.0.0"]
+env_vars = ["NEW_RELIC_API_KEY", "NEW_RELIC_ACCOUNT_ALLOWLIST"]
+required = true
+startup_timeout_sec = 15
+tool_timeout_sec = 90
+default_tools_approval_mode = "prompt"
+
+[mcp_servers.newrelic.env]
+NEW_RELIC_REGION = "US"

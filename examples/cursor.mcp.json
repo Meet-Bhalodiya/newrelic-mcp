@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "newrelic": {
+      "command": "npx",
+      "args": ["-y", "@meet-bhalodiya/newrelic-mcp@1.0.0"],
+      "env": {
+        "NEW_RELIC_API_KEY": "${env:NEW_RELIC_API_KEY}",
+        "NEW_RELIC_REGION": "US",
+        "NEW_RELIC_ACCOUNT_ALLOWLIST": "${env:NEW_RELIC_ACCOUNT_ALLOWLIST}"
+      }
+    }
+  }
+}
