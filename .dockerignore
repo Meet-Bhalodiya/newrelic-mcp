@@ -1,0 +1,16 @@
+.git
+.github
+.context
+.conductor
+node_modules
+coverage
+dist
+*.log
+.env
+.env.*
+!.env.example
+deploy
+helm
+docs
+examples
+secrets

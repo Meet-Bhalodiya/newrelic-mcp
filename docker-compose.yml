@@ -1,0 +1,58 @@
+services:
+  newrelic-mcp:
+    build:
+      context: .
+      target: runtime
+    image: ghcr.io/meet-bhalodiya/newrelic-mcp:local
+    command: ['http', '--host', '0.0.0.0', '--port', '3000']
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    user: '10001:10001'
+    ports:
+      - '127.0.0.1:${MCP_HTTP_PORT:-3000}:3000'
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NEW_RELIC_API_KEY_FILE: /run/secrets/new_relic_api_key
+      MCP_HTTP_HOST: 0.0.0.0
+      MCP_HTTP_PORT: 3000
+      MCP_HTTP_ALLOWED_HOSTS: ${MCP_HTTP_ALLOWED_HOSTS:-localhost,127.0.0.1,newrelic-mcp}
+      MCP_AUTH_MODE: bearer
+      MCP_BEARER_TOKEN_FILE: /run/secrets/mcp_bearer_token
+    secrets:
+      - new_relic_api_key
+      - mcp_bearer_token
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+secrets:
+  new_relic_api_key:
+    file: ${NEW_RELIC_API_KEY_FILE:-./secrets/new_relic_api_key}
+  mcp_bearer_token:
+    file: ${MCP_BEARER_TOKEN_FILE:-./secrets/mcp_bearer_token}
