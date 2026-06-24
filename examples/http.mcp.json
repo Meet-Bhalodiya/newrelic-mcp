@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "newrelic": {
+      "url": "https://newrelic-mcp.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer REPLACE_USING_YOUR_CLIENTS_SECRET_STORE"
+      }
+    }
+  }
+}
