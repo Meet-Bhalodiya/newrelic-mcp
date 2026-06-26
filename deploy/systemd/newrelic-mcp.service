@@ -1,0 +1,34 @@
+[Unit]
+Description=New Relic MCP Server
+Documentation=https://github.com/Meet-Bhalodiya/newrelic-mcp
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=newrelic-mcp
+Group=newrelic-mcp
+WorkingDirectory=/opt/newrelic-mcp
+EnvironmentFile=/etc/newrelic-mcp/environment
+ExecStart=/usr/bin/node /opt/newrelic-mcp/dist/cli.js http --host 127.0.0.1 --port 3000
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
