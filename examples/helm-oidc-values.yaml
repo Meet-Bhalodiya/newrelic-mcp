@@ -1,0 +1,39 @@
+# The cancellation registry is process-local. Before raising this value, configure
+# deterministic ingress affinity and divide the upstream concurrency budget; see
+# docs/performance.md. Authorization-value hashing can remap after token refresh.
+replicaCount: 1
+
+secrets:
+  existingSecret: newrelic-mcp
+
+config:
+  newRelicRegion: EU
+  accountAllowlist: '1234567'
+  toolsets: core,nrql,entities,alerts,dashboards,synthetics,workloads,service-levels,logs,metrics
+  allowedHosts: newrelic-mcp.example.com
+  allowedOrigins: https://claude.ai
+
+auth:
+  mode: oidc
+  oidcIssuer: https://identity.example.com/
+  oidcAudience: https://newrelic-mcp.example.com/mcp
+  oidcJwksUri: https://identity.example.com/.well-known/jwks.json
+  oidcAlgorithms: RS256,ES256
+  resourceUrl: https://newrelic-mcp.example.com/mcp
+
+ingress:
+  enabled: true
+  className: nginx
+  # ingress-nginx only: if replicaCount > 1, this is a per-token fallback, not
+  # stable principal affinity; token refresh can remap an in-flight call. Prefer
+  # identity derived by a trusted OIDC-aware proxy. See docs/performance.md.
+  # annotations:
+  #   nginx.ingress.kubernetes.io/upstream-hash-by: "$http_authorization"
+  hosts:
+    - host: newrelic-mcp.example.com
+      paths:
+        - path: /mcp
+          pathType: Exact
+  tls:
+    - secretName: newrelic-mcp-tls
+      hosts: [newrelic-mcp.example.com]

@@ -1,0 +1,41 @@
+# Keep one replica for deterministic SDK cancellation. For replicas > 1, divide
+# the upstream concurrency budget and configure trusted-proxy request affinity;
+# see docs/performance.md.
+replicaCount: 1
+
+image:
+  repository: ghcr.io/meet-bhalodiya/newrelic-mcp
+  tag: '1.0.0'
+
+secrets:
+  existingSecret: newrelic-mcp
+
+config:
+  newRelicRegion: US
+  defaultAccountId: '1234567'
+  accountAllowlist: '1234567'
+  toolsets: core,nrql,entities,alerts,dashboards,synthetics,workloads,service-levels,logs,metrics
+  allowedHosts: newrelic-mcp.example.com
+  allowedOrigins: https://claude.ai
+  concurrency: 20
+  nrqlConcurrency: 5
+
+auth:
+  mode: bearer
+
+ingress:
+  enabled: true
+  className: nginx
+  # ingress-nginx only: when replicaCount > 1, token hashing provides affinity
+  # while the same Authorization value is used for both POSTs. Keep TLS enabled,
+  # omit Authorization from proxy logs, and review docs/performance.md tradeoffs.
+  # annotations:
+  #   nginx.ingress.kubernetes.io/upstream-hash-by: "$http_authorization"
+  hosts:
+    - host: newrelic-mcp.example.com
+      paths:
+        - path: /mcp
+          pathType: Prefix
+  tls:
+    - secretName: newrelic-mcp-tls
+      hosts: [newrelic-mcp.example.com]
