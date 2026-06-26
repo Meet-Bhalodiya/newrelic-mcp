@@ -1,0 +1,33 @@
+{{- if .Values.metrics.serviceMonitor.enabled }}
+{{- if not .Values.metrics.enabled }}
+{{- fail "metrics.serviceMonitor.enabled requires metrics.enabled=true" }}
+{{- end }}
+{{- if ne .Values.auth.mode "bearer" }}
+{{- fail "the bundled ServiceMonitor requires auth.mode=bearer; configure an external OAuth-aware scraper for OIDC" }}
+{{- end }}
+{{- if empty .Values.metrics.serviceMonitor.networkPolicyNamespaceLabels }}
+{{- fail "metrics.serviceMonitor.networkPolicyNamespaceLabels must identify the Prometheus namespace" }}
+{{- end }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "newrelic-mcp.fullname" . }}
+  labels:
+    {{- include "newrelic-mcp.labels" . | nindent 4 }}
+    {{- with .Values.metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "newrelic-mcp.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+      authorization:
+        type: Bearer
+        credentials:
+          name: {{ .Values.secrets.existingSecret }}
+          key: {{ .Values.secrets.bearerTokenKey }}
+{{- end }}

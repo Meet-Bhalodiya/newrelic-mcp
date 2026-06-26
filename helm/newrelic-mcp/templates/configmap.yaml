@@ -1,0 +1,44 @@
+{{- if not (has .Values.auth.mode (list "bearer" "oidc")) }}
+{{- fail "auth.mode must be bearer or oidc for the non-loopback Helm deployment" }}
+{{- end }}
+{{- if and (eq .Values.auth.mode "oidc") (or (empty .Values.auth.oidcIssuer) (empty .Values.auth.oidcAudience) (empty .Values.auth.resourceUrl)) }}
+{{- fail "auth.mode=oidc requires auth.oidcIssuer, auth.oidcAudience, and auth.resourceUrl" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "newrelic-mcp.fullname" . }}
+  labels:
+    {{- include "newrelic-mcp.labels" . | nindent 4 }}
+data:
+  NEW_RELIC_REGION: {{ .Values.config.newRelicRegion | quote }}
+  NEW_RELIC_DEFAULT_ACCOUNT_ID: {{ .Values.config.defaultAccountId | quote }}
+  NEW_RELIC_ACCOUNT_ALLOWLIST: {{ .Values.config.accountAllowlist | quote }}
+  NEW_RELIC_TOOLSETS: {{ .Values.config.toolsets | quote }}
+  NEW_RELIC_ENABLE_WRITES: {{ .Values.config.enableWrites | quote }}
+  NEW_RELIC_ENABLE_DESTRUCTIVE: {{ .Values.config.enableDestructive | quote }}
+  NEW_RELIC_ENABLE_ADMIN: {{ .Values.config.enableAdmin | quote }}
+  NEW_RELIC_ENABLE_PREVIEW_APIS: {{ .Values.config.enablePreviewApis | quote }}
+  NEW_RELIC_ENABLE_EXPERIMENTAL_AI_ISSUES: {{ .Values.config.enableExperimentalAiIssues | quote }}
+  NEW_RELIC_CONCURRENCY: {{ .Values.config.concurrency | int64 | quote }}
+  NEW_RELIC_NRQL_CONCURRENCY: {{ .Values.config.nrqlConcurrency | int64 | quote }}
+  NEW_RELIC_TIMEOUT_MS: {{ .Values.config.timeoutMs | int64 | quote }}
+  NEW_RELIC_NRQL_TIMEOUT_MS: {{ .Values.config.nrqlTimeoutMs | int64 | quote }}
+  NEW_RELIC_MAX_RESPONSE_BYTES: {{ .Values.config.maxResponseBytes | int64 | quote }}
+  NEW_RELIC_CACHE_TTL_MS: {{ .Values.config.cacheTtlMs | int64 | quote }}
+  NEW_RELIC_CACHE_MAX_ENTRIES: {{ .Values.config.cacheMaxEntries | int64 | quote }}
+  MCP_HTTP_HOST: "0.0.0.0"
+  MCP_HTTP_PORT: {{ .Values.service.port | int64 | quote }}
+  MCP_HTTP_ALLOWED_HOSTS: {{ printf "%s,%s,%s.%s.svc,localhost,127.0.0.1" .Values.config.allowedHosts (include "newrelic-mcp.fullname" .) (include "newrelic-mcp.fullname" .) .Release.Namespace | trimPrefix "," | quote }}
+  MCP_HTTP_ALLOWED_ORIGINS: {{ .Values.config.allowedOrigins | quote }}
+  MCP_HTTP_MAX_BODY_BYTES: {{ .Values.config.maxBodyBytes | int64 | quote }}
+  MCP_AUTH_MODE: {{ .Values.auth.mode | quote }}
+  MCP_OIDC_ISSUER: {{ .Values.auth.oidcIssuer | quote }}
+  MCP_OIDC_AUDIENCE: {{ .Values.auth.oidcAudience | quote }}
+  MCP_OIDC_JWKS_URI: {{ .Values.auth.oidcJwksUri | quote }}
+  MCP_OIDC_ALGORITHMS: {{ .Values.auth.oidcAlgorithms | quote }}
+  MCP_OIDC_RESOURCE_URL: {{ .Values.auth.resourceUrl | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  MCP_METRICS_ENABLED: {{ .Values.metrics.enabled | quote }}
+  MCP_TELEMETRY_ENABLED: {{ .Values.otel.enabled | quote }}
+  OTEL_SERVICE_NAME: {{ .Values.otel.serviceName | quote }}

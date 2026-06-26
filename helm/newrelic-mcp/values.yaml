@@ -1,0 +1,176 @@
+# Keep one replica for deterministic SDK cancellation. With more than one, divide
+# the New Relic concurrency budget and configure trusted-proxy affinity as described
+# in docs/performance.md; the in-flight cancellation registry is process-local.
+replicaCount: 1
+
+image:
+  repository: ghcr.io/meet-bhalodiya/newrelic-mcp
+  pullPolicy: IfNotPresent
+  tag: ''
+
+imagePullSecrets: []
+nameOverride: ''
+fullnameOverride: ''
+
+serviceAccount:
+  create: true
+  automount: false
+  annotations: {}
+  name: ''
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ['ALL']
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+
+service:
+  type: ClusterIP
+  port: 3000
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ''
+  # For ingress-nginx with replicas > 1, this provides token affinity only while
+  # the same Authorization value is used for the original and cancellation POSTs:
+  # annotations:
+  #   nginx.ingress.kubernetes.io/upstream-hash-by: "$http_authorization"
+  # Keep TLS enabled and never include Authorization in proxy logs. A shared bearer
+  # token maps all of its traffic to one pod; see docs/performance.md.
+  annotations: {}
+  hosts:
+    - host: newrelic-mcp.example.com
+      paths:
+        - path: /mcp
+          pathType: Prefix
+  tls: []
+  # - secretName: newrelic-mcp-tls
+  #   hosts: [newrelic-mcp.example.com]
+
+# Create this Secret before installing. It must contain `new-relic-api-key` and,
+# when auth.mode=bearer, `mcp-bearer-token`.
+secrets:
+  existingSecret: newrelic-mcp
+  newRelicApiKeyKey: new-relic-api-key
+  bearerTokenKey: mcp-bearer-token
+
+config:
+  newRelicRegion: US
+  defaultAccountId: ''
+  accountAllowlist: ''
+  toolsets: core,nrql,entities,alerts,dashboards,synthetics,workloads,service-levels,logs,metrics
+  enableWrites: false
+  enableDestructive: false
+  enableAdmin: false
+  enablePreviewApis: false
+  enableExperimentalAiIssues: false
+  concurrency: 20
+  nrqlConcurrency: 5
+  timeoutMs: 30000
+  nrqlTimeoutMs: 60000
+  maxResponseBytes: 1048576
+  cacheTtlMs: 0
+  cacheMaxEntries: 500
+  logLevel: info
+  allowedHosts: newrelic-mcp.example.com
+  allowedOrigins: ''
+  maxBodyBytes: 1048576
+
+auth:
+  mode: bearer
+  # For oidc, set these and leave the bearer secret unused.
+  oidcIssuer: ''
+  oidcAudience: ''
+  oidcJwksUri: ''
+  oidcAlgorithms: RS256,ES256
+  resourceUrl: ''
+
+metrics:
+  enabled: false
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    labels: {}
+    networkPolicyNamespaceLabels:
+      kubernetes.io/metadata.name: monitoring
+
+otel:
+  enabled: false
+  serviceName: newrelic-mcp
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: '1'
+    memory: 512Mi
+
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 30
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /readyz
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+startupProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  periodSeconds: 2
+  failureThreshold: 30
+
+strategy:
+  type: Recreate
+
+networkPolicy:
+  enabled: true
+  ingressNamespaceLabels:
+    kubernetes.io/metadata.name: ingress-nginx
+  additionalIngress: []
+  additionalEgress: []
+
+podDisruptionBudget:
+  enabled: false
+  maxUnavailable: 1
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+
+nodeSelector: {}
+tolerations: []
+# This is Kubernetes pod scheduling affinity, not HTTP request affinity. Configure
+# cancellation routing through ingress.annotations or the external load balancer.
+affinity: {}
+topologySpreadConstraints: []
+priorityClassName: ''
+extraEnv: []
+extraVolumes: []
+extraVolumeMounts: []

@@ -1,0 +1,18 @@
+1. Ensure the credential Secret exists:
+
+   kubectl -n {{ .Release.Namespace }} create secret generic {{ .Values.secrets.existingSecret }} \
+     --from-file=new-relic-api-key=./new-relic-api-key \
+     {{- if eq .Values.auth.mode "bearer" }}
+     --from-file=mcp-bearer-token=./mcp-bearer-token
+     {{- end }}
+
+2. The MCP endpoint is /mcp. Keep TLS enabled at the ingress and restrict allowed
+   Hosts and Origins to the public name.
+
+3. This chart defaults to one replica because New Relic applies a 25-concurrent-
+   request limit per user across every key owned by that user. Before scaling,
+   divide NEW_RELIC_CONCURRENCY across replicas or use separately budgeted users.
+   SDK cancellation is a separate POST and the in-flight registry is process-local.
+   Keep one replica for deterministic cancellation, or configure trusted-proxy
+   affinity so original and cancellation POSTs reach the same replica. Without it,
+   cancellation is best-effort until the server deadline. See docs/performance.md.

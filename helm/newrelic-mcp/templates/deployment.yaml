@@ -1,0 +1,138 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "newrelic-mcp.fullname" . }}
+  labels:
+    {{- include "newrelic-mcp.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    {{- toYaml .Values.strategy | nindent 4 }}
+  selector:
+    matchLabels:
+      {{- include "newrelic-mcp.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "newrelic-mcp.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "newrelic-mcp.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: newrelic-mcp
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["http", "--host", "0.0.0.0", "--port", {{ .Values.service.port | quote }}]
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "newrelic-mcp.fullname" . }}
+          env:
+            - name: NEW_RELIC_API_KEY_FILE
+              value: /run/secrets/newrelic/api-key
+            {{- if eq .Values.auth.mode "bearer" }}
+            - name: MCP_BEARER_TOKEN_FILE
+              value: /run/secrets/mcp/bearer-token
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          livenessProbe:
+            {{- omit .Values.livenessProbe "httpGet" | toYaml | nindent 12 }}
+            httpGet:
+              {{- toYaml .Values.livenessProbe.httpGet | nindent 14 }}
+              httpHeaders:
+                - name: Host
+                  value: {{ include "newrelic-mcp.fullname" . | quote }}
+          readinessProbe:
+            {{- omit .Values.readinessProbe "httpGet" | toYaml | nindent 12 }}
+            httpGet:
+              {{- toYaml .Values.readinessProbe.httpGet | nindent 14 }}
+              httpHeaders:
+                - name: Host
+                  value: {{ include "newrelic-mcp.fullname" . | quote }}
+          startupProbe:
+            {{- omit .Values.startupProbe "httpGet" | toYaml | nindent 12 }}
+            httpGet:
+              {{- toYaml .Values.startupProbe.httpGet | nindent 14 }}
+              httpHeaders:
+                - name: Host
+                  value: {{ include "newrelic-mcp.fullname" . | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: newrelic-api-key
+              mountPath: /run/secrets/newrelic
+              readOnly: true
+            {{- if eq .Values.auth.mode "bearer" }}
+            - name: mcp-bearer-token
+              mountPath: /run/secrets/mcp
+              readOnly: true
+            {{- end }}
+            - name: tmp
+              mountPath: /tmp
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: newrelic-api-key
+          secret:
+            secretName: {{ .Values.secrets.existingSecret }}
+            defaultMode: 0400
+            items:
+              - key: {{ .Values.secrets.newRelicApiKeyKey }}
+                path: api-key
+        {{- if eq .Values.auth.mode "bearer" }}
+        - name: mcp-bearer-token
+          secret:
+            secretName: {{ .Values.secrets.existingSecret }}
+            defaultMode: 0400
+            items:
+              - key: {{ .Values.secrets.bearerTokenKey }}
+                path: bearer-token
+        {{- end }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
