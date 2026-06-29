@@ -1,0 +1,46 @@
+name: Bug report
+description: Report a reproducible, non-sensitive defect
+title: 'bug: '
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include keys, tokens, JWTs, account IDs, NRQL, entity identifiers, raw responses, or customer data. Report vulnerabilities privately through SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: 1.0.0 or commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transport
+      options: [stdio, Streamable HTTP]
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: MCP client and version
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Sanitized reproduction
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and safe error code
+    validations:
+      required: true
