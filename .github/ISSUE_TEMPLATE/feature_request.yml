@@ -1,0 +1,23 @@
+name: Feature request
+description: Propose a documented New Relic or MCP capability
+title: 'feature: '
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and use case
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Official New Relic or MCP documentation URL
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Expected read/write/destructive/admin classification and data sensitivity
+    validations:
+      required: true
