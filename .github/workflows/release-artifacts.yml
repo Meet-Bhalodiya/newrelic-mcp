@@ -1,0 +1,60 @@
+name: Prepare release artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Expected semver already committed in package metadata
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify committed versions match input
+        env:
+          EXPECTED_VERSION: ${{ inputs.version }}
+        run: |
+          node --input-type=module -e "import p from './package.json' with {type:'json'}; import s from './server.json' with {type:'json'}; import b from './mcpb.json' with {type:'json'}; if([p.version,s.version,b.version].some(v=>v!==process.env.EXPECTED_VERSION)) process.exit(1)"
+      - run: npm run verify
+      - name: Build npm tarball
+        run: npm pack
+      - name: Build chart archive
+        run: helm package helm/newrelic-mcp
+      - name: Build MCPB bundle candidate
+        run: |
+          mkdir --parents /tmp/newrelic-mcp-mcpb
+          cp --recursive dist /tmp/newrelic-mcp-mcpb/dist
+          cp package.json package-lock.json /tmp/newrelic-mcp-mcpb/
+          cp mcpb.json /tmp/newrelic-mcp-mcpb/manifest.json
+          npm ci --omit=dev --ignore-scripts --prefix /tmp/newrelic-mcp-mcpb
+          npx --yes @anthropic-ai/mcpb@2.1.2 validate /tmp/newrelic-mcp-mcpb/manifest.json
+          npx --yes @anthropic-ai/mcpb@2.1.2 pack \
+            /tmp/newrelic-mcp-mcpb "newrelic-mcp-${{ inputs.version }}.mcpb"
+      - name: Generate checksums
+        run: sha256sum *.tgz *.mcpb > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-candidates-${{ inputs.version }}
+          path: |
+            *.tgz
+            *.mcpb
+            SHA256SUMS
+            server.json
+            mcpb.json
+          if-no-files-found: error
+          retention-days: 30

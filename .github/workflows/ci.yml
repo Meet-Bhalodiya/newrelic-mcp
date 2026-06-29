@@ -1,0 +1,230 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        with:
+          egress-policy: audit
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Coverage
+        if: matrix.node == 24
+        run: npm run test:coverage
+      - name: Upload coverage
+        if: matrix.node == 24
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage
+          path: coverage/
+          if-no-files-found: error
+          retention-days: 14
+
+  manifests:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Validate MCP Registry manifest
+        run: |
+          curl --fail --silent --show-error \
+            https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json \
+            --output /tmp/server.schema.json
+          npx --yes ajv-cli@5.0.0 validate --spec=draft7 --strict=false \
+            -s /tmp/server.schema.json -d server.json
+      - name: Validate MCPB source manifest
+        run: npx --yes @anthropic-ai/mcpb@2.1.2 validate mcpb.json
+      - name: Validate Helm chart
+        run: |
+          helm lint helm/newrelic-mcp
+          helm template newrelic-mcp helm/newrelic-mcp \
+            --namespace newrelic-mcp \
+            --values examples/helm-values.yaml \
+            > /tmp/newrelic-mcp.yaml
+          test -s /tmp/newrelic-mcp.yaml
+          helm template newrelic-mcp helm/newrelic-mcp \
+            --namespace newrelic-mcp \
+            --values examples/helm-oidc-values.yaml \
+            > /tmp/newrelic-mcp-oidc.yaml
+          test -s /tmp/newrelic-mcp-oidc.yaml
+          if helm template invalid helm/newrelic-mcp --set auth.mode=oidc; then
+            echo "OIDC chart rendering unexpectedly accepted missing public metadata"
+            exit 1
+          fi
+
+  package-smoke:
+    needs: verify
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Pack and install tarball
+        run: |
+          TARBALL="$(npm pack --json | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s)[0].filename))")"
+          mkdir /tmp/package-smoke
+          cd /tmp/package-smoke
+          npm init --yes
+          npm install "$GITHUB_WORKSPACE/$TARBALL"
+          NEW_RELIC_API_KEY=not-a-real-key \
+            ./node_modules/.bin/newrelic-mcp tools --json > tools.json
+          test -s tools.json
+          cp "$GITHUB_WORKSPACE/$TARBALL" "$GITHUB_WORKSPACE/package.tgz"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: npm-package
+          path: package.tgz
+          if-no-files-found: error
+          retention-days: 14
+
+  container:
+    needs: verify
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Build runtime image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          target: runtime
+          load: true
+          tags: newrelic-mcp:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke-test hardened image
+        run: |
+          docker run --detach --name newrelic-mcp \
+            --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --publish 127.0.0.1:3000:3000 \
+            --env NEW_RELIC_API_KEY=not-a-real-key \
+            --env MCP_AUTH_MODE=bearer \
+            --env MCP_BEARER_TOKEN=0000000000000000000000000000000000000000000000000000000000000000 \
+            --env MCP_HTTP_ALLOWED_HOSTS=127.0.0.1,localhost \
+            newrelic-mcp:ci
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3000/readyz > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          docker logs newrelic-mcp
+          exit 1
+      - name: Install pinned kind
+        run: go install sigs.k8s.io/kind@v0.31.0
+      - name: Smoke-test Helm deployment in Kubernetes
+        run: |
+          KIND="$(go env GOPATH)/bin/kind"
+          "$KIND" create cluster --name newrelic-mcp-ci \
+            --image kindest/node:v1.35.0@sha256:452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f
+          "$KIND" load docker-image newrelic-mcp:ci --name newrelic-mcp-ci
+          kubectl create namespace newrelic-mcp
+          kubectl --namespace newrelic-mcp create secret generic newrelic-mcp \
+            --from-literal=new-relic-api-key=not-a-real-key \
+            --from-literal=mcp-bearer-token=0000000000000000000000000000000000000000000000000000000000000000
+          helm upgrade --install smoke helm/newrelic-mcp \
+            --namespace newrelic-mcp \
+            --set image.repository=newrelic-mcp \
+            --set image.tag=ci \
+            --set image.pullPolicy=Never \
+            --wait --timeout 3m
+          kubectl --namespace newrelic-mcp rollout status deployment/smoke-newrelic-mcp \
+            --timeout=60s
+          kubectl --namespace newrelic-mcp port-forward service/smoke-newrelic-mcp 3300:3000 \
+            > /tmp/newrelic-mcp-port-forward.log 2>&1 &
+          echo $! > /tmp/newrelic-mcp-port-forward.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3300/readyz > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/newrelic-mcp-port-forward.log
+          exit 1
+      - name: Generate image SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          image: newrelic-mcp:ci
+          format: spdx-json
+          output-file: image.spdx.json
+      - name: Scan image
+        # Transitive/base-image CVEs (undici, tar, ip-address, …) churn upstream; findings are
+        # surfaced to the Security tab via the SARIF upload below rather than hard-blocking merges.
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: newrelic-mcp:ci
+          format: sarif
+          output: trivy.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+      - name: Upload Trivy SARIF
+        if: always() && hashFiles('trivy.sarif') != ''
+        uses: github/codeql-action/upload-sarif@641a925cfafe92d0fdf8b239ba4053e3f8d99d6d # v3
+        with:
+          sarif_file: trivy.sarif
+      - name: Upload SBOM
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: image-sbom
+          path: image.spdx.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Stop smoke container
+        if: always()
+        run: |
+          if test -f /tmp/newrelic-mcp-port-forward.pid; then
+            kill "$(cat /tmp/newrelic-mcp-port-forward.pid)" 2>/dev/null || true
+          fi
+          "$(go env GOPATH)/bin/kind" delete cluster --name newrelic-mcp-ci || true
+          docker rm --force newrelic-mcp || true
