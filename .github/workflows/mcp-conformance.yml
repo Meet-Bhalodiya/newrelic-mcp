@@ -1,0 +1,59 @@
+name: MCP conformance
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conformance:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Start stateless HTTP server
+        env:
+          NEW_RELIC_API_KEY: not-a-real-key
+          NEW_RELIC_TOOLSETS: core
+          MCP_AUTH_MODE: none
+          MCP_HTTP_HOST: 127.0.0.1
+          MCP_HTTP_PORT: 3100
+          MCP_HTTP_ALLOWED_HOSTS: 127.0.0.1,localhost
+          MCP_HTTP_ALLOWED_ORIGINS: http://127.0.0.1:3100,http://localhost:3100
+        run: |
+          node dist/cli.js http > /tmp/newrelic-mcp.stdout 2> /tmp/newrelic-mcp.stderr &
+          echo $! > /tmp/newrelic-mcp.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3100/readyz > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/newrelic-mcp.stderr
+          exit 1
+      - name: Official server conformance suite
+        run: npx --yes @modelcontextprotocol/conformance@0.1.16 server --url http://127.0.0.1:3100/mcp --suite active --expected-failures .github/conformance-baseline.yml
+      - name: Inspector smoke over HTTP
+        run: npx --yes @modelcontextprotocol/inspector@0.22.0 --cli http://127.0.0.1:3100/mcp --transport http --method tools/list
+      - name: Inspector smoke over stdio
+        env:
+          NEW_RELIC_API_KEY: not-a-real-key
+          NEW_RELIC_TOOLSETS: core
+        run: npx --yes @modelcontextprotocol/inspector@0.22.0 --cli node dist/cli.js stdio --method tools/list
+      - name: Stop HTTP server
+        if: always()
+        run: kill "$(cat /tmp/newrelic-mcp.pid)" 2>/dev/null || true
