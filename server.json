@@ -1,0 +1,65 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "name": "io.github.Meet-Bhalodiya/newrelic-mcp",
+  "title": "New Relic MCP Server",
+  "description": "Secure, self-hosted New Relic observability and administration tools for MCP clients",
+  "version": "1.0.0",
+  "repository": {
+    "url": "https://github.com/Meet-Bhalodiya/newrelic-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/Meet-Bhalodiya/newrelic-mcp#readme",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@meet-bhalodiya/newrelic-mcp",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtimeHint": "npx",
+      "runtimeArguments": [
+        {
+          "type": "positional",
+          "value": "-y"
+        },
+        {
+          "type": "positional",
+          "value": "@meet-bhalodiya/newrelic-mcp@1.0.0"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "NEW_RELIC_API_KEY",
+          "description": "New Relic user key. Create a dedicated least-privilege key.",
+          "format": "string",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "NEW_RELIC_REGION",
+          "description": "New Relic data region: US, EU, or JP.",
+          "format": "string",
+          "isRequired": false,
+          "isSecret": false,
+          "default": "US",
+          "choices": ["US", "EU", "JP"]
+        },
+        {
+          "name": "NEW_RELIC_DEFAULT_ACCOUNT_ID",
+          "description": "Optional default account ID used when a tool omits accountId.",
+          "format": "string",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "NEW_RELIC_ACCOUNT_ALLOWLIST",
+          "description": "Optional comma-separated account IDs this deployment may access.",
+          "format": "string",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
