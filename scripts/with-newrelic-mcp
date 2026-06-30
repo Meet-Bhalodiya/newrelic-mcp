@@ -1,0 +1,34 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+project_dir=$(dirname -- "$script_dir")
+token_file="$project_dir/secrets/mcp_bearer_token"
+
+case "${1:-}" in
+  claude | codex)
+    client=$1
+    shift
+    ;;
+  *)
+    echo "Usage: $0 claude|codex [client arguments...]" >&2
+    exit 2
+    ;;
+esac
+
+if [ ! -r "$token_file" ]; then
+  echo "Missing readable bearer token: $token_file" >&2
+  exit 1
+fi
+
+if ! curl --fail --silent --show-error http://127.0.0.1:6161/readyz >/dev/null; then
+  echo "New Relic MCP is not ready. Start it with:" >&2
+  echo "  docker compose -f $project_dir/docker-compose.local.yml up --detach --wait" >&2
+  exit 1
+fi
+
+NEW_RELIC_MCP_TOKEN=$(tr -d '\r\n' < "$token_file")
+export NEW_RELIC_MCP_TOKEN
+
+cd "$project_dir"
+exec "$client" "$@"

@@ -1,0 +1,80 @@
+{
+  "manifest_version": "0.3",
+  "name": "newrelic-mcp",
+  "display_name": "New Relic MCP Server",
+  "version": "1.0.0",
+  "description": "Read-only-by-default access to New Relic observability through MCP.",
+  "long_description": "A self-hosted MCP server for querying New Relic telemetry, entities, alerts, dashboards, synthetics, workloads, and service levels. Mutations are disabled by default and require explicit safety gates and confirmation.",
+  "author": {
+    "name": "Meet Bhalodiya",
+    "url": "https://github.com/Meet-Bhalodiya"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meet-Bhalodiya/newrelic-mcp.git"
+  },
+  "homepage": "https://github.com/Meet-Bhalodiya/newrelic-mcp",
+  "documentation": "https://github.com/Meet-Bhalodiya/newrelic-mcp/tree/master/docs",
+  "support": "https://github.com/Meet-Bhalodiya/newrelic-mcp/issues",
+  "license": "Apache-2.0",
+  "privacy_policies": ["https://newrelic.com/termsandconditions/privacy"],
+  "keywords": ["new-relic", "observability", "nrql", "incident-response", "mcp"],
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=22.7.5"
+    }
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "dist/cli.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/cli.js", "stdio"],
+      "env": {
+        "NEW_RELIC_API_KEY": "${user_config.new_relic_api_key}",
+        "NEW_RELIC_REGION": "${user_config.new_relic_region}",
+        "NEW_RELIC_DEFAULT_ACCOUNT_ID": "${user_config.default_account_id}",
+        "NEW_RELIC_ACCOUNT_ALLOWLIST": "${user_config.account_allowlist}",
+        "NEW_RELIC_TOOLSETS": "${user_config.toolsets}"
+      }
+    }
+  },
+  "tools_generated": true,
+  "prompts_generated": true,
+  "user_config": {
+    "new_relic_api_key": {
+      "type": "string",
+      "title": "New Relic user key",
+      "description": "A dedicated, least-privilege New Relic user key.",
+      "sensitive": true,
+      "required": true
+    },
+    "new_relic_region": {
+      "type": "string",
+      "title": "New Relic region",
+      "description": "The data region containing the account.",
+      "default": "US",
+      "required": true
+    },
+    "default_account_id": {
+      "type": "string",
+      "title": "Default account ID",
+      "description": "Optional account used when a tool omits accountId.",
+      "required": false
+    },
+    "account_allowlist": {
+      "type": "string",
+      "title": "Account allowlist",
+      "description": "Optional comma-separated list of account IDs.",
+      "required": false
+    },
+    "toolsets": {
+      "type": "string",
+      "title": "Enabled toolsets",
+      "description": "Comma-separated toolsets to register.",
+      "default": "core,nrql,entities,alerts,dashboards,synthetics,workloads,service-levels,logs,metrics",
+      "required": true
+    }
+  }
+}
